@@ -1,0 +1,20 @@
+{
+  "name": "koa-rest-resource",
+  "version": "0.1.0",
+  "description": "hal+json Resource manager for Koa",
+  "main": "index.js",
+  "scripts": {
+    "test": "NODE_ENV=test node node_modules/mocha/bin/mocha --harmony --reporter=spec --timeout=10000"
+  },
+  "keywords": [
+    "Koa",
+    "REST",
+    "resource",
+    "hal+json"
+  ],
+  "author": "Petr Joachim <petr@joachim.cz>",
+  "license": "MIT",
+  "devDependencies": {
+    "mocha": "~1.21.4"
+  }
+}
