@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "description": "hal+json Resource manager for Koa",
   "main": "index.js",
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:seznam/koa-rest-resource.git"
+  },
   "scripts": {
     "test": "NODE_ENV=test node node_modules/mocha/bin/mocha --harmony --reporter=spec --timeout=10000"
   },
@@ -15,6 +19,16 @@
   "author": "Petr Joachim <petr@joachim.cz>",
   "license": "MIT",
   "devDependencies": {
-    "mocha": "~1.21.4"
+    "mocha": "~1.21.4",
+    "mocha-jshint": "0.0.9",
+    "co": "~3.1.0",
+    "thunkagent": "~1.0.2",
+    "supertest": "~0.13.0",
+    "koa": "~0.10.0",
+    "koa-error": "~1.1.2"
+  },
+  "dependencies": {
+    "koa-router": "~3.3.0",
+    "debug": "~1.0.4"
   }
 }
