@@ -118,8 +118,6 @@ Manager.prototype.middleware = function(){
                                 }
                             }
                         }
-                        // TODO extract
-                        // TODO ?view=* => shortcut
                         return this;
                     }
                 }
@@ -136,14 +134,40 @@ Manager.prototype.middleware = function(){
     };
 };
 
-Manager.prototype.read = function*(ctx, uri){
+Manager.prototype.read = function*(ctx, uri, options){
     var matchedRoutes = this.match(uri);
     for (var len = matchedRoutes.length, i=0; i<len; i++) {
         var route = matchedRoutes[i].route;
         var resource = route.middleware();
 
         if("read" in resource){
-            return yield resource.read(ctx, uri, true);
+            var body = yield resource.read(ctx, uri, true);
+            // decorate properly - view, format, extract
+            if(options && "view" in options){
+                options = resource.shortcut(options.view);
+            } else if(!options && "shortcut" in resource){
+                options = resource.shortcut();
+            } else {
+                options = {};
+            }
+            if("format" in resource){
+                resource.format(body, options.add);
+            }
+            if("extract" in options && "extract" in resource && "embed" in resource){
+                var extract = Object.keys(options.extract);
+                for(var j = 0, x = extract.length; j < x; j++){
+                    var relation = extract[j];
+                    var links = resource.extract(body, relation);
+
+                    debug("extracted", links);
+
+                    for(var k = 0, ll = links.length; k < ll; k++ ){
+                        var embedResource = yield this.read(this, links[k]);
+                        resource.embed(body, relation, embedResource);
+                    }
+                }
+            }
+            return body;
         }
     }
     return {uuid: 2};

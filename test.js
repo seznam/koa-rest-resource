@@ -4,7 +4,6 @@ var Manager = require("./index");
 var testagent = require("supertest");
 var agent = require("thunkagent");
 var koa = require("koa");
-var error = require("koa-error");
 var hal = require("halson");
 
 
@@ -16,12 +15,9 @@ function API(middleware) {
     var app = koa();
     if(process.env.LOGGER == "1")
         app.use(logger());
-    app.use(error());
     app.use(middleware);
     app.on("error", function(err) {
-        if (!err.expose) {
-            console.log("server error", err);
-        }
+        console.log("server error", err.stack);
     });
     return app.listen();
 }
@@ -58,14 +54,14 @@ describe("Manager", function(){
             };
             _.resource("resource", "/resource", resource);
         }));
-        it("Should decline empty resource", co(function*(){
+        it("should decline empty resource", co(function*(){
             var _ = Manager();
             assert.throws(function(){_.resource("resource", "/resource", {});}, assert.AssertionError);
         }));
     });
 
     describe("Resource routing", function(){
-        it("Should route request to proper resource", co(function*(){
+        it("should route request to proper resource", co(function*(){
             var _ = Manager();
             var resource1 = {
                 get: function*(ctx){
@@ -94,7 +90,7 @@ describe("Manager", function(){
     });
 
     describe("Resource uri generating", function(){
-        it("Should convert resource name to uri", co(function*(){
+        it("should convert resource name to uri", co(function*(){
             var _ = Manager();
             var resource = { get: function*(){}};
             _.resource("r1", "/r1", resource);
@@ -112,7 +108,7 @@ describe("Manager", function(){
     });
 
     describe("Resource formating", function(){
-        it("Should double", co(function*(){
+        it("should double", co(function*(){
             var _ = Manager();
             var resource = {
                 get: function*(ctx){
@@ -139,7 +135,7 @@ describe("Manager", function(){
             assert.equal(body.number, 2);
         }));
 
-        it("Should extract _links from default view", co(function*(){
+        it("should extract _links from default view", co(function*(){
             var _ = Manager();
             
             var resource1 = HalsonResource({
@@ -156,7 +152,7 @@ describe("Manager", function(){
 
             var resource2 = {
                 get: function*(ctx){
-                    ctx.body = yield this.read(ctx, ctx.path, false); //TODO querystring ?!
+                    ctx.body = yield this.read(ctx, ctx.path, false); //TODO querystring, params ?!
                 },
                 read: function*(ctx, uri, embed){
                     // TODO jak predat jiny stav nez 200?
@@ -177,6 +173,51 @@ describe("Manager", function(){
 
             var body = JSON.parse(res.text);
             assert.equal(body._embedded.relation.uuid, 1);
+        }));
+
+        it("should extract _links in nested resources (recursive)", co(function*(){
+            var _ = Manager();
+            
+            var resource1 = HalsonResource({
+                get: function*(ctx){
+                    ctx.body = hal()
+                        .addLink("self", ctx.path)
+                        .addLink("relation", ctx.path.concat("/data"));
+                },
+                shortcut: function(word){return {extract: {"relation": {}}};}
+            });
+
+            var resource2 =  HalsonResource({
+                get: function*(ctx){},
+                read: function*(ctx, uri, embed){
+                    return hal()
+                        .addLink("self", uri)
+                        .addLink("nested-relation", uri.concat("/nested"));
+                },
+                shortcut: function(word){return {extract: {"nested-relation": {}}};}
+            });
+
+            var resource3 =  HalsonResource({
+                get: function*(ctx){},
+                read: function*(ctx, uri, embed){
+                    return hal()
+                        .addLink("self", uri);
+                }
+            });
+
+
+            _.resource("r", "/r/:uuid", resource1);
+            _.resource("data", "/r/:uuid/data", resource2);
+            _.resource("data-nested", "/r/:uuid/data/nested", resource3);
+
+            var res = yield testagent(API(_.middleware()))
+                .get("/r/1?view=full")
+                .buffer(true)
+                .expect(200)
+                .thunk();
+
+            var body = JSON.parse(res.text);
+            assert.equal(body._embedded.relation._embedded["nested-relation"]._links.self.href, "/r/1/data/nested");
         }));
     });
 });
