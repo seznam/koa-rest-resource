@@ -5,6 +5,7 @@ var testagent = require("supertest");
 var agent = require("thunkagent");
 var koa = require("koa");
 var error = require("koa-error");
+var hal = require("halson");
 
 
 testagent.Test.prototype.thunk = agent.Request.prototype.thunk;
@@ -25,7 +26,30 @@ function API(middleware) {
     return app.listen();
 }
 
-describe.only("Manager", function(){
+var HalsonResource = function(methods){
+    methods.extract = function(bodies, relation, profile){
+        bodies = [].concat(bodies);
+        var resources = [];
+        bodies.forEach(function(body){
+            var links = body.getLinks(relation);
+            for(var i = 0, len = links.length; i < len; i++){
+                if(links[i].href){
+                    resources.push(links[i].href);
+                }
+            }
+        });
+        return resources;
+    };
+    methods.embed = function(bodies, relation, embeds){
+        bodies = [].concat(bodies);
+        embeds = [].concat(embeds);
+
+        bodies[0].addEmbed(relation, embeds[0]);
+    };
+    return methods;
+};
+
+describe("Manager", function(){
     describe("Resource registry", function(){
         it("should register resource", co(function*(){
             var _ = Manager();
@@ -44,13 +68,13 @@ describe.only("Manager", function(){
         it("Should route request to proper resource", co(function*(){
             var _ = Manager();
             var resource1 = {
-                get: function*(){
-                    this.status = 200;
-                    this.body = {};
+                get: function*(ctx){
+                    ctx.status = 200;
+                    ctx.body = {};
                 }
             };
             var resource2 = {
-                get: function*(){this.status = 404;},
+                get: function*(ctx){ctx.status = 404;},
                 post: function*(){}
             };
 
@@ -66,7 +90,6 @@ describe.only("Manager", function(){
                 .get("/r2")
                 .expect(404)
                 .thunk();
-
         }));
     });
 
@@ -85,6 +108,75 @@ describe.only("Manager", function(){
             _.resource("r1", "/r1/:uuid", resource);
 
             assert.equal(_.url("r1", 123), "/r1/123");
+        }));
+    });
+
+    describe("Resource formating", function(){
+        it("Should double", co(function*(){
+            var _ = Manager();
+            var resource = {
+                get: function*(ctx){
+                    ctx.body = {
+                        number: parseInt(ctx.params.number)
+                    };
+                },
+                format: function(body){
+                    // format keywords
+                    body.number = 2 * body.number;
+                    return body;
+                }
+            };
+
+            _.resource("r", "/r/:number", resource);
+
+            var res = yield testagent(API(_.middleware()))
+                .get("/r/1")
+                .buffer(true)
+                .expect(200)
+                .thunk();
+
+            var body = JSON.parse(res.text);
+            assert.equal(body.number, 2);
+        }));
+
+        it("Should extract _links from default view", co(function*(){
+            var _ = Manager();
+            
+            var resource1 = HalsonResource({
+                get: function*(ctx){
+                    var uuid = ctx.params.uuid;
+                    ctx.body = hal().addLink("self", ctx.path);
+                },
+                format: function(body){
+                    body.addLink("relation", {href: (body.getLink("self").href).concat("/data"), profile: "data-resource"});
+                    return body;
+                },
+                shortcut: function(word){return {extract: {"relation": {}}};}
+            });
+
+            var resource2 = {
+                get: function*(ctx){
+                    ctx.body = yield this.read(ctx, ctx.path, false); //TODO querystring ?!
+                },
+                read: function*(ctx, uri, embed){
+                    // TODO jak predat jiny stav nez 200?
+                    // if(!embed) ctx.status = 403
+                    // else return;
+                    return {uuid: 1};
+                }
+            };
+
+            _.resource("r", "/r/:uuid", resource1);
+            _.resource("data", "/r/:uuid/data", resource2);
+
+            var res = yield testagent(API(_.middleware()))
+                .get("/r/1?view=full")
+                .buffer(true)
+                .expect(200)
+                .thunk();
+
+            var body = JSON.parse(res.text);
+            assert.equal(body._embedded.relation.uuid, 1);
         }));
     });
 });

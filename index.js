@@ -91,7 +91,36 @@ Manager.prototype.middleware = function(){
                         merge(this.params, params);
 
                         debug('dispatch "%s" %s', route.path, route.regexp);
-                        return yield (route.middleware())[method.toLowerCase()].call(this, next);
+                        var resource = route.middleware();
+
+                        yield resource[method.toLowerCase()](this, next);
+                        if(method === "GET"){
+                            var options = {};
+                            if("view" in this.query && "shortcut" in resource){
+                                options = resource.shortcut(this.query.view);
+                            }
+                            if("format" in resource){
+                                debug("format resource with");
+                                this.body = resource.format(this.body, options.add);
+                            }
+                            if("extract" in options && "extract" in resource && "embed" in resource){
+                                var extract = Object.keys(options.extract);
+                                for(var j = 0, x = extract.length; j < x; j++){
+                                    var relation = extract[j];
+                                    var links = resource.extract(this.body, relation);
+
+                                    debug("extracted", links);
+
+                                    for(var k = 0, ll = links.length; k < ll; k++ ){
+                                        var embedResource = yield manager.read(this, links[k]);
+                                        resource.embed(this.body, relation, embedResource);
+                                    }
+                                }
+                            }
+                        }
+                        // TODO extract
+                        // TODO ?view=* => shortcut
+                        return this;
                     }
                 }
             }
@@ -101,10 +130,23 @@ Manager.prototype.middleware = function(){
             return yield next;
         }
 
-        if (!~router.methods.indexOf(this.method.toLowerCase())) {
+        if (!~this.methods.indexOf(this.method.toLowerCase())) {
             this.status = 501;
         }
     };
+};
+
+Manager.prototype.read = function*(ctx, uri){
+    var matchedRoutes = this.match(uri);
+    for (var len = matchedRoutes.length, i=0; i<len; i++) {
+        var route = matchedRoutes[i].route;
+        var resource = route.middleware();
+
+        if("read" in resource){
+            return yield resource.read(ctx, uri, true);
+        }
+    }
+    return {uuid: 2};
 };
 
 function merge(a, b) {
