@@ -8,7 +8,7 @@ function Manager(){
     this.methods = ["get", "post", "put", "delete", "link", "unlink"];
 }
 
-Manager.prototype.resource = function(name, path, resource){
+Manager.prototype.resource = function(path, resource){
     allowed = [];
     for(var m = 0; m < this.methods.length; m++){
         method = this.methods[m].toLowerCase();
@@ -17,14 +17,14 @@ Manager.prototype.resource = function(name, path, resource){
             allowed.push(method);
         }
     }
-    assert(allowed.length > 0, "Resource ['" + name + "'] MUST implement at least one HTTP method");
+    assert(allowed.length > 0, "Resource ['" + path + "'] MUST implement at least one HTTP method");
 
-    debug("Resource [%s] registered on %s with methods: %s", name, path, allowed);
+    debug("Resource [%s] registered on %s with methods: %s", path, allowed);
 
-    var route = new Route(path, allowed, [function(){return resource;}], name);
+    var route = new Route(path, allowed, [function(){return resource;}], resource.name);
     this.routes.push(route);
-    if(name){
-        this.namedRoutes[name] = route;
+    if(resource.name){
+        this.namedRoutes[resource.name] = route;
     }
 };
 

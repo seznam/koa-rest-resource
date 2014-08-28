@@ -52,11 +52,11 @@ describe("Manager", function(){
             var resource = {
                 get: function*(){}
             };
-            _.resource("resource", "/resource", resource);
+            _.resource("/resource", resource);
         }));
         it("should decline empty resource", co(function*(){
             var _ = Manager();
-            assert.throws(function(){_.resource("resource", "/resource", {});}, assert.AssertionError);
+            assert.throws(function(){_.resource("/resource", {});}, assert.AssertionError);
         }));
     });
 
@@ -74,8 +74,8 @@ describe("Manager", function(){
                 post: function*(){}
             };
 
-            _.resource("r1", "/r1", resource1);
-            _.resource("r2", "/r2", resource2);
+            _.resource("/r1", resource1);
+            _.resource("/r2", resource2);
 
             yield testagent(API(_.middleware()))
                 .get("/r1")
@@ -92,16 +92,16 @@ describe("Manager", function(){
     describe("Resource uri generating", function(){
         it("should convert resource name to uri", co(function*(){
             var _ = Manager();
-            var resource = { get: function*(){}};
-            _.resource("r1", "/r1", resource);
+            var resource = {name: "r1", get: function*(){}};
+            _.resource("/r1", resource);
 
             assert.equal(_.url("r1"), "/r1");
         }));
 
         it("should convert resource name to uri - with params", co(function*(){
             var _ = Manager();
-            var resource = { get: function*(){}};
-            _.resource("r1", "/r1/:uuid", resource);
+            var resource = {name: "r1", get: function*(){}};
+            _.resource("/r1/:uuid", resource);
 
             assert.equal(_.url("r1", 123), "/r1/123");
         }));
@@ -123,7 +123,7 @@ describe("Manager", function(){
                 }
             };
 
-            _.resource("r", "/r/:number", resource);
+            _.resource("/r/:number", resource);
 
             var res = yield testagent(API(_.middleware()))
                 .get("/r/1")
@@ -159,8 +159,8 @@ describe("Manager", function(){
                 }
             };
 
-            _.resource("r", "/r/:uuid", resource1);
-            _.resource("data", "/r/:uuid/data", resource2);
+            _.resource("/r/:uuid", resource1);
+            _.resource("/r/:uuid/data", resource2);
 
             var res = yield testagent(API(_.middleware()))
                 .get("/r/1?view=full")
@@ -203,9 +203,9 @@ describe("Manager", function(){
             });
 
 
-            _.resource("r", "/r/:uuid", resource1);
-            _.resource("data", "/r/:uuid/data", resource2);
-            _.resource("data-nested", "/r/:uuid/data/nested", resource3);
+            _.resource("/r/:uuid", resource1);
+            _.resource("/r/:uuid/data", resource2);
+            _.resource("/r/:uuid/data/nested", resource3);
 
             var res = yield testagent(API(_.middleware()))
                 .get("/r/1?view=full")
@@ -251,9 +251,9 @@ describe("Manager", function(){
             });
 
 
-            _.resource("r", "/r/:uuid", resource1);
-            _.resource("data", "/r/:uuid/data/:foo", resource2);
-            _.resource("data-nested", "/r/:uuid/data/:foo/nested/:bar", resource3);
+            _.resource("/r/:uuid", resource1);
+            _.resource("/r/:uuid/data/:foo", resource2);
+            _.resource("/r/:uuid/data/:foo/nested/:bar", resource3);
 
             var res = yield testagent(API(_.middleware()))
                 .get("/r/1?view=full")
@@ -273,7 +273,50 @@ describe("Manager", function(){
 
     describe("Optimization", function(){
         it("should call only one read per resource", co(function*(){
-            assert(false);
+            var _ = Manager();
+            
+            var resource1 = HalsonResource({
+                get: function*(ctx){
+                    ctx.body = hal()
+                        .addLink("self", ctx.path)
+                        .addLink("relation", ctx.path.concat("/data/1"))
+                        .addLink("relation", ctx.path.concat("/other/2"))
+                        .addLink("relation", ctx.path.concat("/data/3"));
+                },
+                shortcut: function(word){return {extract: {"relation": {}}};}
+            });
+
+            var calls = 0;
+
+            var resource2 =  HalsonResource({
+                get: function*(ctx){},
+                read: function*(ctx, uri, embed){
+                    calls = calls + 1;
+                    return hal()
+                        .addLink("self", uri);
+                },
+            });
+            var resource3 =  HalsonResource({
+                get: function*(ctx){},
+                read: function*(ctx, uri, embed){
+                    calls = calls + 1;
+                    return hal()
+                        .addLink("self", uri);
+                },
+            });
+
+            _.resource("/r/:uuid", resource1);
+            _.resource("/r/:uuid/data/:foo", resource2);
+            _.resource("/r/:uuid/other/:foo", resource2);
+
+            var res = yield testagent(API(_.middleware()))
+                .get("/r/1?view=full")
+                .buffer(true)
+                .expect(200)
+                .thunk();
+
+            var body = JSON.parse(res.text);
+            assert.equal(calls, 2);
         }));
     });
 });
