@@ -98,7 +98,7 @@ describe("Manager", function(){
             assert.equal(_.url("r1"), "/r1");
         }));
 
-        it("Should convert resource name to uri - with params", co(function*(){
+        it("should convert resource name to uri - with params", co(function*(){
             var _ = Manager();
             var resource = { get: function*(){}};
             _.resource("r1", "/r1/:uuid", resource);
@@ -108,7 +108,7 @@ describe("Manager", function(){
     });
 
     describe("Resource formating", function(){
-        it("should double", co(function*(){
+        it("should format resource by default", co(function*(){
             var _ = Manager();
             var resource = {
                 get: function*(ctx){
@@ -152,12 +152,9 @@ describe("Manager", function(){
 
             var resource2 = {
                 get: function*(ctx){
-                    ctx.body = yield this.read(ctx, ctx.path, false); //TODO querystring, params ?!
+                    ctx.body = yield this.read(ctx, ctx.path, false);
                 },
                 read: function*(ctx, uri, embed){
-                    // TODO jak predat jiny stav nez 200?
-                    // if(!embed) ctx.status = 403
-                    // else return;
                     return {uuid: 1};
                 }
             };
@@ -218,6 +215,65 @@ describe("Manager", function(){
 
             var body = JSON.parse(res.text);
             assert.equal(body._embedded.relation._embedded["nested-relation"]._links.self.href, "/r/1/data/nested");
+        }));
+
+        it("should extract multiple items in proper order", co(function*(){
+            var _ = Manager();
+            
+            var resource1 = HalsonResource({
+                get: function*(ctx){
+                    ctx.body = hal()
+                        .addLink("self", ctx.path)
+                        .addLink("relation", ctx.path.concat("/data/1"))
+                        .addLink("relation", ctx.path.concat("/data/2"));
+                },
+                shortcut: function(word){return {extract: {"relation": {}}};}
+            });
+
+            var resource2 =  HalsonResource({
+                get: function*(ctx){},
+                read: function*(ctx, uri, embed){
+                    return hal()
+                        .addLink("self", uri)
+                        .addLink("nested-relation", uri.concat("/nested/1"))
+                        .addLink("nested-relation", uri.concat("/nested/2"))
+                        .addLink("nested-relation", uri.concat("/nested/3"));
+                },
+                shortcut: function(word){return {extract: {"nested-relation": {}}};}
+            });
+
+            var resource3 =  HalsonResource({
+                get: function*(ctx){},
+                read: function*(ctx, uri, embed){
+                    return hal()
+                        .addLink("self", uri);
+                }
+            });
+
+
+            _.resource("r", "/r/:uuid", resource1);
+            _.resource("data", "/r/:uuid/data/:foo", resource2);
+            _.resource("data-nested", "/r/:uuid/data/:foo/nested/:bar", resource3);
+
+            var res = yield testagent(API(_.middleware()))
+                .get("/r/1?view=full")
+                .buffer(true)
+                .expect(200)
+                .thunk();
+
+            var body = JSON.parse(res.text);
+            assert.equal(body._embedded.relation[0]._embedded["nested-relation"][0]._links.self.href, "/r/1/data/1/nested/1");
+            assert.equal(body._embedded.relation[0]._embedded["nested-relation"][1]._links.self.href, "/r/1/data/1/nested/2");
+            assert.equal(body._embedded.relation[0]._embedded["nested-relation"][2]._links.self.href, "/r/1/data/1/nested/3");
+            assert.equal(body._embedded.relation[1]._embedded["nested-relation"][0]._links.self.href, "/r/1/data/2/nested/1");
+            assert.equal(body._embedded.relation[1]._embedded["nested-relation"][1]._links.self.href, "/r/1/data/2/nested/2");
+            assert.equal(body._embedded.relation[1]._embedded["nested-relation"][2]._links.self.href, "/r/1/data/2/nested/3");
+        }));
+    });
+
+    describe("Optimization", function(){
+        it("should call only one read per resource", co(function*(){
+            assert(false);
         }));
     });
 });
