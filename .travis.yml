@@ -1,12 +1,3 @@
 language: node_js
 node_js:
   - '0.11'
-deploy:
-  provider: npm
-  email: petr@joachim.cz
-  api_key:
-    secure: gxKivhpFi/1DKOF5mGHsv/gncMc8FEEJ7s6SBY0B4h3FNO1QFO7kxloPAxdgcH8hGamzPFQJcCKBa5ydLZiouwkEjQAiI/tlqqbcf5GL6r4z8zI7eG8ffNwBWpn97jmlcTIprAknTlAu/nZ4nl8pB3Un3H3tDo3mj4R84E8ba6o=
-  on:
-    tags: true
-    branch: master
-    repo: seznam/koa-rest-resource
