@@ -271,7 +271,7 @@ describe("Manager", function(){
         }));
     });
 
-    describe("Optimization", function(){
+    describe.skip("Optimization", function(){
         it("should call only one read per resource", co(function*(){
             var _ = Manager();
             
