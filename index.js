@@ -25,6 +25,9 @@ Manager.prototype.resource = function(path, resource){
     this.routes.push(route);
     if(resource.name){
         this.namedRoutes[resource.name] = route;
+    } else {
+        // just for internal use
+        resource.name = path;
     }
 };
 
